@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useState } from 'react'
 import Spellcheck from '../spellcheck/spellcheck'
 import Grid from '@material-ui/core/Grid'
 import { hot } from 'react-hot-loader'
@@ -14,8 +15,107 @@ import SortIcon from '@material-ui/icons/Sort'
 import ResultFilter from '../result-filter/result-filter'
 import { useBackbone } from '../selection-checkbox/useBackbone.hook'
 import EphemeralSearchSort from '../../react-component/query-sort-selection/ephemeral-search-sort'
-import { useLazyResultsStatusFromSelectionInterface } from '../selection-interface/hooks'
+import {
+  useLazyResultsStatusFromSelectionInterface,
+  useLazyResultsSelectedResultsFromSelectionInterface,
+} from '../selection-interface/hooks'
+import Box from '@material-ui/core/Box'
+//@ts-ignore
+import VisualizationSelector from '../../react-component/visualization-selector/visualization-selector'
+import ViewCompactIcon from '@material-ui/icons/ViewCompact'
+import ArrowDownwardIcon from '@material-ui/icons/ArrowDownward'
 const user = require('../singletons/user-instance.js')
+import MoreIcon from '@material-ui/icons/MoreVert'
+
+import LazyMetacardInteractions from '../results-visual/lazy-metacard-interactions'
+import { Elevations } from '../theme/theme'
+import useTheme from '@material-ui/core/styles/useTheme'
+import SelectionRipple from '../golden-layout/selection-ripple'
+import { ResultType } from '../../js/model/Types'
+import Extensions from '../../extension-points'
+
+const postAuditLog = Extensions.postAuditLog
+let selectedIds = new Set<string>()
+
+const SelectedResults = ({ selectionInterface }: any) => {
+  const selectedResults = useLazyResultsSelectedResultsFromSelectionInterface({
+    selectionInterface,
+  })
+  const selectedResultsArray = Object.values(selectedResults)
+
+  return (
+    <Dropdown
+      content={({ close }) => {
+        return (
+          <BetterClickAwayListener onClickAway={close}>
+            <Paper>
+              <LazyMetacardInteractions
+                lazyResults={selectedResultsArray}
+                onClose={() => {
+                  close()
+                }}
+              />
+            </Paper>
+          </BetterClickAwayListener>
+        )
+      }}
+    >
+      {({ handleClick }) => {
+        if(postAuditLog !== undefined){
+          let newSelectedIds = new Set<string>()
+          for(let key in selectedResults){
+            newSelectedIds.add(key)
+          }
+
+          let unselectedIds = new Set<string>()
+          if(selectedIds.size > 0){
+            selectedIds.forEach((id: string) => {
+              if(!newSelectedIds.has(id)){
+                unselectedIds.add(id)
+              }
+            })
+            if(unselectedIds.size > 0){
+              postAuditLog({
+                action: 'unselected',
+                component: 'resource',
+                ids: unselectedIds,
+              })
+            }
+          }
+
+          if(newSelectedIds.size > 0){
+            postAuditLog({
+              action: 'selected',
+              component: 'resource',
+              ids: newSelectedIds,
+            })
+            selectedIds = newSelectedIds
+          }
+        }
+        
+        return (
+          <Button
+            className={`relative ${
+              selectedResultsArray.length === 0 ? 'invisible' : ''
+            }`}
+            color="primary"
+            disabled={selectedResultsArray.length === 0}
+            onClick={handleClick}
+            style={{ height: '100%' }}
+            size="small"
+          >
+            {selectedResultsArray.length} selected
+            <Box
+              color={selectedResultsArray.length === 0 ? '' : 'text.primary'}
+            >
+              <MoreIcon />
+            </Box>
+          </Button>
+        )
+      }}
+    </Dropdown>
+  )
+}
 
 const determineHasResultFilter = () => {
   return (
@@ -38,27 +138,18 @@ const determineHasResultSort = () => {
 type Props = {
   selectionInterface: any
   model: any
+  goldenLayoutViewInstance: any
+  layoutResult?: ResultType
+  editLayoutRef?: any
 }
 
-const GridStyles = {
-  padding: '0px 10px',
-}
-
-const ContainerStyles = {
-  position: 'relative',
-  padding: '10px',
-} as React.CSSProperties
-
-const ProgressStyles = {
-  position: 'absolute',
-  width: '100%',
-  height: '10px',
-  left: '0px',
-  bottom: '0px',
-  transition: 'opacity 1s ease-in-out',
-} as React.CSSProperties
-
-const ResultSelector = ({ selectionInterface, model }: Props) => {
+const ResultSelector = ({
+  selectionInterface,
+  model,
+  goldenLayoutViewInstance,
+  layoutResult,
+  editLayoutRef,
+}: Props) => {
   const { isSearching } = useLazyResultsStatusFromSelectionInterface({
     selectionInterface,
   })
@@ -78,39 +169,45 @@ const ResultSelector = ({ selectionInterface, model }: Props) => {
       setHasResultSort(determineHasResultSort())
     })
   }, [])
+  const theme = useTheme()
+  const LayoutDropdown = Extensions.layoutDropdown({
+    goldenLayout: goldenLayoutViewInstance,
+    layoutResult,
+    editLayoutRef,
+  })
   return (
     <React.Fragment>
-      <Grid
-        container
-        alignItems="center"
-        justify="center"
-        direction="row"
-        style={ContainerStyles}
-      >
+      <Grid container alignItems="center" justify="flex-start" direction="row">
         <LinearProgress
           variant="query"
-          style={{
-            ...ProgressStyles,
-            opacity: isSearching ? 1 : 0,
-          }}
+          className={`${
+            isSearching ? 'opacity-100' : 'opacity-0'
+          } absolute w-full h-1 left-0 bottom-0 transition-opacity`}
         />
 
-        <Grid item style={GridStyles}>
+        <Grid item>
           <Spellcheck
             key={Math.random()}
             selectionInterface={selectionInterface}
             model={model}
           />
         </Grid>
-        <Grid item style={GridStyles}>
+        <Grid item className="relative z-10">
           <QueryFeed selectionInterface={selectionInterface} />
         </Grid>
-        <Grid item style={GridStyles}>
+        <Grid item className="relative z-0">
+          <SelectionRipple selectionInterface={selectionInterface} />
+          <SelectedResults selectionInterface={selectionInterface} />
+        </Grid>
+        <Grid item className="pl-2 mx-auto">
+          <Paging selectionInterface={selectionInterface} />
+        </Grid>
+        <Grid item className="ml-auto">
           <Dropdown
             content={({ closeAndRefocus }) => {
               return (
                 <BetterClickAwayListener onClickAway={closeAndRefocus}>
-                  <Paper className="p-3" elevation={23}>
+                  <Paper className="p-3" elevation={Elevations.overlays}>
                     <ResultFilter closeDropdown={closeAndRefocus} />
                   </Paper>
                 </BetterClickAwayListener>
@@ -119,22 +216,31 @@ const ResultSelector = ({ selectionInterface, model }: Props) => {
           >
             {({ handleClick }) => {
               return (
-                <Button onClick={handleClick}>
-                  Filter{' '}
-                  <FilterListIcon
-                    color={hasResultFilter ? 'secondary' : 'inherit'}
-                  />
+                <Button
+                  onClick={handleClick}
+                  variant="text"
+                  color="primary"
+                  style={{
+                    borderBottom: hasResultFilter
+                      ? `1px solid ${theme.palette.warning.main}`
+                      : '0px',
+                  }}
+                >
+                  <Box color="text.primary">
+                    <FilterListIcon />
+                  </Box>
+                  Filter
                 </Button>
               )
             }}
           </Dropdown>
         </Grid>
-        <Grid item style={GridStyles}>
+        <Grid item className="pl-2">
           <Dropdown
             content={({ closeAndRefocus }) => {
               return (
                 <BetterClickAwayListener onClickAway={closeAndRefocus}>
-                  <Paper className="p-3" elevation={23}>
+                  <Paper className="p-3" elevation={Elevations.overlays}>
                     <EphemeralSearchSort closeDropdown={closeAndRefocus} />
                   </Paper>
                 </BetterClickAwayListener>
@@ -143,17 +249,53 @@ const ResultSelector = ({ selectionInterface, model }: Props) => {
           >
             {({ handleClick }) => {
               return (
-                <Button onClick={handleClick}>
-                  Sort{' '}
-                  <SortIcon color={hasResultSort ? 'secondary' : 'inherit'} />
+                <Button
+                  onClick={handleClick}
+                  variant="text"
+                  color="primary"
+                  style={{
+                    borderBottom: hasResultSort
+                      ? `1px solid ${theme.palette.warning.main}`
+                      : '0px',
+                  }}
+                >
+                  <Box color="text.primary">
+                    <ArrowDownwardIcon />
+                  </Box>
+                  Sort
                 </Button>
               )
             }}
           </Dropdown>
         </Grid>
-
-        <Grid item style={GridStyles}>
-          <Paging selectionInterface={selectionInterface} />
+        <Grid item className="pl-2">
+          <Dropdown
+            content={({ closeAndRefocus }) => {
+              return (
+                <BetterClickAwayListener onClickAway={closeAndRefocus}>
+                  <Paper className="p-3" elevation={Elevations.overlays}>
+                    {LayoutDropdown || (
+                      <VisualizationSelector
+                        onClose={closeAndRefocus}
+                        goldenLayout={goldenLayoutViewInstance.goldenLayout}
+                      />
+                    )}
+                  </Paper>
+                </BetterClickAwayListener>
+              )
+            }}
+          >
+            {({ handleClick }) => {
+              return (
+                <Button color="primary" onClick={handleClick}>
+                  <Box color="text.primary">
+                    <ViewCompactIcon />
+                  </Box>
+                  <Box className="pl-1">Layout</Box>
+                </Button>
+              )
+            }}
+          </Dropdown>
         </Grid>
       </Grid>
     </React.Fragment>

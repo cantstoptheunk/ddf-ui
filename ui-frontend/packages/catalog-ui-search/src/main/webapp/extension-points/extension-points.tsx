@@ -18,6 +18,7 @@ import visualizations from './visualizations'
 import metacardInteractions from './metacard-interactions'
 import { tableExport, Props as TableExportProps } from './table-export'
 import { Props } from '../react-component/filter/filter-input/filter-input'
+import { AuditLog } from './audit-log/audit-log'
 
 export type ExtensionPointsType = {
   providers: SFC<ProviderProps>
@@ -25,6 +26,7 @@ export type ExtensionPointsType = {
   metacardInteractions: any[]
   tableExport: SFC<TableExportProps>
   customFilterInput: (props: Props) => React.ReactNode | undefined
+  postAuditLog: ({ action, component, ids }: AuditLog) => React.ReactNode | undefined
 }
 
 const ExtensionPoints: ExtensionPointsType = {
@@ -33,6 +35,7 @@ const ExtensionPoints: ExtensionPointsType = {
   metacardInteractions,
   tableExport,
   customFilterInput: () => undefined,
+  postAuditLog: async () => undefined,
 }
 
 export default ExtensionPoints
